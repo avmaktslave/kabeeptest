@@ -1,33 +1,9 @@
-/**
- * Sample React Native App
- * https://github.com/facebook/react-native
- *
- * @format
- * @flow
- */
-
-import React, {Component} from 'react';
-import {Platform, StyleSheet, Text, View} from 'react-native';
-
-const instructions = Platform.select({
-  ios: 'Press Cmd+R to reload,\n' + 'Cmd+D or shake for dev menu',
-  android:
-    'Double tap R on your keyboard to reload,\n' +
-    'Shake or press menu button for dev menu',
-});
-
-type Props = {};
-export default class App extends Component<Props> {
-  render() {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.welcome}>Welcome to React Native!</Text>
-        <Text style={styles.instructions}>To get started, edit App.js</Text>
-        <Text style={styles.instructions}>{instructions}</Text>
-      </View>
-    );
-  }
-}
+import React from 'react';
+import PropTypes from 'prop-types';
+import { StyleSheet, View } from 'react-native';
+import { Text, Button } from 'native-base';
+import { createAppContainer, createStackNavigator } from 'react-navigation';
+import Recorder from './components/Recorder';
 
 const styles = StyleSheet.create({
   container: {
@@ -39,11 +15,46 @@ const styles = StyleSheet.create({
   welcome: {
     fontSize: 20,
     textAlign: 'center',
+    color: 'green',
     margin: 10,
   },
-  instructions: {
-    textAlign: 'center',
-    color: '#333333',
-    marginBottom: 5,
+  button: {
+    alignSelf: 'center',
+    marginTop: 20,
   },
 });
+
+const HomeScreen = ({ navigation }) => (
+  <View style={styles.container}>
+    <Text style={styles.welcome}>Welcome to React Native!</Text>
+    <Text style={styles.instructions}>To get started, edit App.js</Text>
+    <Button
+      style={styles.button}
+      bordered
+      onPress={() => navigation.navigate('Record')}
+    >
+      <Text>Go to recorder</Text>
+    </Button>
+  </View>
+);
+
+HomeScreen.propTypes = {
+  navigation: PropTypes.instanceOf(Object).isRequired,
+};
+
+const AppNavigator = createStackNavigator({
+  Home: {
+    screen: HomeScreen,
+  },
+  Record: {
+    screen: Recorder,
+  },
+});
+
+const AppContainer = createAppContainer(AppNavigator);
+
+const App = () => {
+  return <AppContainer />;
+};
+
+export default App;
