@@ -1,5 +1,5 @@
 import React from 'react';
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet } from 'react-native';
 import { Button, Text } from 'native-base';
 import Voice from 'react-native-voice';
 import Tts from 'react-native-tts';
@@ -11,9 +11,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     backgroundColor: '#F5FCFF',
   },
+  button: {
+    alignSelf: 'center',
+    margin: 20,
+  },
   transcript: {
     textAlign: 'center',
-    color: '#B0171F',
+    color: '#fff',
     marginBottom: 1,
     top: '400%',
   },
@@ -53,10 +57,6 @@ export default class VoiceAssistent extends React.Component {
     Voice.onSpeechResults = this.onSpeechResults;
     Voice.onSpeechEnd = this.onSpeechEnd;
     Voice.onSpeechError = this.onSpeechError;
-    this.path = Platform.select({
-      ios: 'hello.m4a',
-      android: 'sdcard/hello.mp4', // should give extra dir name in android. Won't grant permission to the first level of dir.
-    });
   }
 
   componentDidMount() {
@@ -74,11 +74,13 @@ export default class VoiceAssistent extends React.Component {
   onSpeechError = e => {
     clearTimeout(this.time);
     if (e.error.message.includes('7')) {
+      console.log(e);
       Tts.speak("sorry but i didn't understand, please repeat"); // eslint-disable-line
       this.time = setTimeout(async () => {
         await Voice.start('en-US');
       }, 2500);
     } else {
+      console.log(e);
       clearTimeout(this.time);
       Tts.speak('see you');
     }
@@ -97,12 +99,17 @@ export default class VoiceAssistent extends React.Component {
   };
 
   onSpeechResults = async e => {
-    Tts.speak(e.value[0]);
+    console.log(e.value[0]);
+    clearTimeout(this.time);
     const dialogflowResponse = await getDialogFlow(e.value[0]);
+    Tts.speak(dialogflowResponse.result.fulfillment.speech);
     console.log(dialogflowResponse.result.fulfillment.speech);
+    this.time = setTimeout(async () => {
+      await Voice.start('en-US');
+    }, 1000);
   };
 
-  _startRecognition = () => {
+  startRecognition = () => {
     clearTimeout(this.time);
     Tts.speak('what would you like to do');
     this.time = setTimeout(async () => {
@@ -112,7 +119,7 @@ export default class VoiceAssistent extends React.Component {
 
   render() {
     return (
-      <Button rounded style={styles.button}>
+      <Button bordered style={styles.button} onPress={this.startRecognition}>
         <Text>Speak</Text>
       </Button>
     );

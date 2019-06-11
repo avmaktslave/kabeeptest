@@ -44,14 +44,18 @@ const styles = StyleSheet.create({
 });
 
 export default class Recorder extends React.Component {
-  state = {
-    currentTime: 0.0,
-    recording: false,
-    paused: false,
-    stoppedRecording: false,
-    audioPath: `${AudioUtils.DocumentDirectoryPath}/test.aac`,
-    hasPermission: undefined,
-  };
+  constructor(props) {
+    super(props);
+    this.state = {
+      currentTime: 0.0,
+      recording: false,
+      paused: false,
+      stoppedRecording: false,
+      audioPath: `${AudioUtils.DocumentDirectoryPath}/test.aac`,
+      hasPermission: undefined,
+    };
+    this.stopRecord = null;
+  }
 
   componentDidMount() {
     const { audioPath } = this.state;
@@ -202,7 +206,27 @@ export default class Recorder extends React.Component {
     this.setState({ recording: true, paused: false });
     try {
       await AudioRecorder.startRecording();
-      AudioRecorder.onProgress = data => console.log(data);
+      if (Platform.OS === 'ios') {
+        const timing = [];
+        AudioRecorder.onProgress = data => {
+          if (data.currentPeakMetering > -24) {
+            timing.length = 0;
+          } else {
+            timing.push(Math.floor(data.currentTime));
+            Math.floor(data.currentTime) - timing[0] === 5 && this._stop();
+          }
+        };
+      } else if (Platform.OS === 'android') {
+        const timing = [];
+        AudioRecorder.onProgress = data => {
+          if (data.currentMetering > 2500) {
+            timing.length = 0;
+          } else {
+            timing.push(Math.floor(data.currentTime));
+            Math.floor(data.currentTime) - timing[0] === 5 && this._stop();
+          }
+        };
+      }
     } catch (error) {
       console.error(error);
     }

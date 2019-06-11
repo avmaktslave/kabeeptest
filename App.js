@@ -4,6 +4,7 @@ import { StyleSheet, View } from 'react-native';
 import { Text, Button } from 'native-base';
 import { createAppContainer, createStackNavigator } from 'react-navigation';
 import Recorder from './components/Recorder';
+import VoiceAssistent from './components/VoiceAssistent';
 
 const styles = StyleSheet.create({
   container: {
@@ -27,7 +28,8 @@ const styles = StyleSheet.create({
 const HomeScreen = ({ navigation }) => (
   <View style={styles.container}>
     <Text style={styles.welcome}>Welcome to React Native!</Text>
-    <Text style={styles.instructions}>To get started, edit App.js</Text>
+    <VoiceAssistent />
+    <Text style={styles.instructions}>To get started, press Speak</Text>
     <Button
       style={styles.button}
       bordered
