@@ -54,13 +54,12 @@ export default class Recorder extends React.Component {
       audioPath: `${AudioUtils.DocumentDirectoryPath}/test.aac`,
       hasPermission: undefined,
     };
-    this.stopRecord = null;
   }
 
   componentDidMount() {
-    const { audioPath } = this.state;
     console.log('native modules', NativeModules);
     console.log(AudioUtils);
+    const { audioPath } = this.state;
     AudioRecorder.requestAuthorization().then(isAuthorised => {
       this.setState({ hasPermission: isAuthorised });
       if (!isAuthorised) return;
