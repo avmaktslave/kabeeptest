@@ -106,7 +106,8 @@ export default class VoiceAssistent extends React.Component {
         this._record();
       }, 5500);
     } else if (
-      dialogflowResponse.result.metadata.intentName === 'After record'
+      dialogflowResponse.result.metadata.intentName ===
+      'Confirm playing after record'
     ) {
       setTimeout(() => {
         this._play();
@@ -162,7 +163,7 @@ export default class VoiceAssistent extends React.Component {
             timing.length = 0;
           } else {
             timing.push(Math.floor(data.currentTime));
-            Math.floor(data.currentTime) - timing[0] === 5 &&
+            Math.floor(data.currentTime) - timing[0] === 3 &&
               this._stop() &&
               Tts.speak('the recording is finished');
           }
@@ -174,7 +175,7 @@ export default class VoiceAssistent extends React.Component {
             timing.length = 0;
           } else {
             timing.push(Math.floor(data.currentTime));
-            Math.floor(data.currentTime) - timing[0] === 5 &&
+            Math.floor(data.currentTime) - timing[0] === 3 &&
               this._stop() &&
               Tts.speak('the recording is finished');
           }

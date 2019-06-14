@@ -27,7 +27,7 @@ const styles = StyleSheet.create({
 
 const HomeScreen = ({ navigation }) => (
   <View style={styles.container}>
-    <Text style={styles.welcome}>Welcome to React Native!</Text>
+    <Text style={styles.welcome}>Welcome to Kabeep!</Text>
     <VoiceAssistent />
     <Text style={styles.instructions}>To get started, press Speak</Text>
     <Button
@@ -35,7 +35,7 @@ const HomeScreen = ({ navigation }) => (
       bordered
       onPress={() => navigation.navigate('Record')}
     >
-      <Text>Go to recorder</Text>
+      {/* <Text>Go to recorder</Text> */}
     </Button>
   </View>
 );
