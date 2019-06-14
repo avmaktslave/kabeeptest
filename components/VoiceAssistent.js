@@ -30,6 +30,8 @@ export default class VoiceAssistent extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
+      isPlaying: false,
+      allowRecognition: false,
       recording: false,
       paused: false,
       stoppedRecording: false,
@@ -37,11 +39,33 @@ export default class VoiceAssistent extends React.Component {
       hasPermission: undefined,
     };
     Voice.onSpeechResults = this.onSpeechResults;
-    Voice.onSpeechError = this.onSpeechError;
+    Voice.onSpeechPartialResults = this.onSpeechPartialResults;
+    Voice.onSpeechRecognized = this.onSpeechRecognized;
+    // Voice.onSpeechError = this.onSpeechError;
   }
 
   componentDidMount() {
     Tts.getInitStatus().then(() => {
+      Tts.addEventListener('tts-start', () => {
+        console.log('oeuoeu');
+      });
+      Tts.addEventListener('tts-finish', async () => {
+        const { allowRecognition, recording, isPlaying } = this.state;
+        if (allowRecognition) {
+          try {
+            await Voice.start();
+          } catch (error) {
+            console.error(error);
+          }
+        }
+        if (recording) {
+          this._record();
+        }
+        if (isPlaying) {
+          this._play();
+        }
+      });
+      Tts.addEventListener('tts-cancel', event => console.log('cancel', event));
       Tts.setDefaultLanguage('en-US');
       Tts.setDefaultVoice('com.apple.ttsbundle.Moira-compact');
       Tts.speak('Welcom to Kabeep service. Press the Speak button to call me'); // eslint-disable-line
@@ -79,38 +103,38 @@ export default class VoiceAssistent extends React.Component {
     });
   };
 
-  onSpeechError = async e => {
-    clearTimeout(this.time);
-    if (e.error.message.includes('7')) {
-      const dialogflowResponse = await getDialogFlow('bla bla bla');
-      await Tts.speak(dialogflowResponse.result.fulfillment.speech); // eslint-disable-line
-      this.time = setTimeout(async () => {
-        await Voice.start('en-US');
-      }, 2500);
-    } else {
-      clearTimeout(this.time);
-      console.log('EEEEERORROORO');
-      Tts.speak('see you');
-    }
-  };
+  // onSpeechError = async e => {
+  // clearTimeout(this.time);
+  // if (e.error.message.includes('7')) {
+  //   const dialogflowResponse = await getDialogFlow('bla bla bla');
+  //   await Tts.speak(dialogflowResponse.result.fulfillment.speech); // eslint-disable-line
+  //   this.time = setTimeout(async () => {
+  //     await Voice.start('en-US');
+  //   }, 2500);
+  // } else {
+  //   clearTimeout(this.time);
+  //   console.log('EEEEERORROORO');
+  //   Tts.speak('see you');
+  // }
+  // };
+
+  onSpeechRecognized = e => console.log('Recognize', e);
+
+  onSpeechPartialResults = e => console.log('Partial', e);
 
   onSpeechResults = async e => {
-    console.log(e.value[0]);
-    clearTimeout(this.time);
+    console.log('Result', e);
     const dialogflowResponse = await getDialogFlow(e.value[0]);
-    await Tts.speak(dialogflowResponse.result.fulfillment.speech);
-    console.log(dialogflowResponse);
+    console.log('response', dialogflowResponse.result);
     if (dialogflowResponse.result.metadata.intentName === 'Record') {
-      setTimeout(() => {
-        console.log('record started');
-        this._record();
-      }, 5500);
+      this.setState({ allowRecognition: false, recording: true });
+      Tts.speak(dialogflowResponse.result.fulfillment.speech);
     } else if (
-      dialogflowResponse.result.metadata.intentName === 'After record'
+      dialogflowResponse.result.metadata.intentName ===
+      'Confirm playing after record'
     ) {
-      setTimeout(() => {
-        this._play();
-      }, 2000);
+      this.setState({ isPlaying: true, allowRecognition: false });
+      Tts.speak(dialogflowResponse.result.fulfillment.speech);
     } else if (dialogflowResponse.result.metadata.intentName === 'Play') {
       if (dialogflowResponse.result.parameters.last === '') {
         this.time = setTimeout(async () => {
@@ -120,18 +144,20 @@ export default class VoiceAssistent extends React.Component {
         this._play();
       }
     } else {
-      this.time = setTimeout(async () => {
-        await Voice.start('en-US');
-      }, 3500);
+      Tts.speak(dialogflowResponse.result.fulfillment.speech);
     }
+    await Voice.stop();
   };
 
   _startRecognition = () => {
-    clearTimeout(this.time);
     Tts.getInitStatus().then(() => Tts.speak("Great, I'm here")); // eslint-disable-line
-    this.time = setTimeout(async () => {
-      await Voice.start('en-US');
-    }, 1000);
+    this.setState({ allowRecognition: true });
+  };
+
+  _finishRecording = async () => {
+    await Tts.speak(
+      'The recording is finished. Would you like to hear your Kabeep?',
+    );
   };
 
   async _record() {
@@ -141,10 +167,6 @@ export default class VoiceAssistent extends React.Component {
       hasPermission,
       stoppedRecording,
     } = this.state;
-    if (recording) {
-      console.warn('Already recording!');
-      return;
-    }
     if (!hasPermission) {
       console.warn("Can't record, no permission granted!"); //eslint-disable-line
       return;
@@ -152,7 +174,8 @@ export default class VoiceAssistent extends React.Component {
     if (stoppedRecording) {
       this.prepareRecordingPath(audioPath);
     }
-    this.setState({ recording: true, paused: false });
+    console.log('recording started');
+    this.setState({ paused: false });
     try {
       await AudioRecorder.startRecording();
       if (Platform.OS === 'ios') {
@@ -162,9 +185,7 @@ export default class VoiceAssistent extends React.Component {
             timing.length = 0;
           } else {
             timing.push(Math.floor(data.currentTime));
-            Math.floor(data.currentTime) - timing[0] === 5 &&
-              this._stop() &&
-              Tts.speak('the recording is finished');
+            Math.floor(data.currentTime) - timing[0] === 3 && this._stop();
           }
         };
       } else if (Platform.OS === 'android') {
@@ -174,9 +195,7 @@ export default class VoiceAssistent extends React.Component {
             timing.length = 0;
           } else {
             timing.push(Math.floor(data.currentTime));
-            Math.floor(data.currentTime) - timing[0] === 5 &&
-              this._stop() &&
-              Tts.speak('the recording is finished');
+            Math.floor(data.currentTime) - timing[0] === 3 && this._stop();
           }
         };
       }
@@ -191,24 +210,21 @@ export default class VoiceAssistent extends React.Component {
       console.warn("Can't stop, not recording!"); //eslint-disable-line
       return;
     }
-    this.setState({ stoppedRecording: true, recording: false, paused: false });
+    this.setState({
+      stoppedRecording: true,
+      recording: false,
+      paused: false,
+      allowRecognition: true,
+    });
     try {
       const filePath = await AudioRecorder.stopRecording();
       setTimeout(() => {
         this._finishRecording();
       }, 0);
-      console.log('AFTER FINISH');
       return filePath;
     } catch (error) {
       console.error(error);
     }
-  }
-
-  _finishRecording() {
-    Tts.speak('Would you like to hear your Kabeep?');
-    this.time = setTimeout(async () => {
-      await Voice.start('en-US');
-    }, 2500);
   }
 
   async _pause() {
