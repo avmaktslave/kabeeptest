@@ -39,58 +39,47 @@ export default class VoiceAssistent extends React.Component {
       hasPermission: undefined,
     };
     Voice.onSpeechResults = this.onSpeechResults;
-    Voice.onSpeechPartialResults = this.onSpeechPartialResults;
-    Voice.onSpeechRecognized = this.onSpeechRecognized;
     // Voice.onSpeechError = this.onSpeechError;
   }
 
-  componentDidMount() {
-    Tts.getInitStatus().then(() => {
-      Tts.addEventListener('tts-start', () => {
-        console.log('oeuoeu');
-      });
-      Tts.addEventListener('tts-finish', async () => {
-        const { allowRecognition, recording, isPlaying } = this.state;
-        if (allowRecognition) {
-          try {
-            await Voice.start();
-          } catch (error) {
-            console.error(error);
-          }
-        }
-        if (recording) {
-          this._record();
-        }
-        if (isPlaying) {
-          this._play();
-        }
-      });
-      Tts.addEventListener('tts-cancel', event => console.log('cancel', event));
-      Tts.setDefaultLanguage('en-US');
-      Tts.setDefaultVoice('com.apple.ttsbundle.Moira-compact');
-      Tts.speak('Welcom to Kabeep service. Press the Speak button to call me'); // eslint-disable-line
+  async componentDidMount() {
+    await Tts.getInitStatus();
+    Tts.addEventListener('tts-start', () => {
+      console.log('oeuoeu');
     });
+    Tts.addEventListener('tts-finish', this.finishHandler);
+    Tts.addEventListener('tts-cancel', event => console.log('cancel', event));
+    Tts.setDefaultLanguage('en-US');
+    Tts.setDefaultVoice('com.apple.ttsbundle.Moira-compact');
+    Tts.speak('Welcom to Kabeep service. Press the Speak button to call me'); // eslint-disable-line
     const { audioPath } = this.state;
     AudioRecorder.requestAuthorization().then(isAuthorised => {
       this.setState({ hasPermission: isAuthorised });
       if (!isAuthorised) return;
       this.prepareRecordingPath(audioPath);
-      AudioRecorder.onFinished = data => {
-        // Android callback comes in the form of a promise instead.
-        if (Platform.OS === 'ios') {
-          this._finishRecording(
-            data.status === 'OK',
-            data.audioFileURL,
-            data.audioFileSize,
-          );
-        }
-      };
     });
   }
 
   componentWillUnmount() {
     Voice.destroy().then(Voice.removeAllListeners);
   }
+
+  finishHandler = async () => {
+    const { allowRecognition, recording, isPlaying } = this.state;
+    if (allowRecognition) {
+      try {
+        await Voice.start();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    if (recording) {
+      this._record();
+    }
+    if (isPlaying) {
+      this._play();
+    }
+  };
 
   prepareRecordingPath = audioPath => {
     AudioRecorder.prepareRecordingAtPath(audioPath, {
@@ -103,24 +92,16 @@ export default class VoiceAssistent extends React.Component {
     });
   };
 
-  // onSpeechError = async e => {
-  // clearTimeout(this.time);
-  // if (e.error.message.includes('7')) {
-  //   const dialogflowResponse = await getDialogFlow('bla bla bla');
-  //   await Tts.speak(dialogflowResponse.result.fulfillment.speech); // eslint-disable-line
-  //   this.time = setTimeout(async () => {
-  //     await Voice.start('en-US');
-  //   }, 2500);
-  // } else {
-  //   clearTimeout(this.time);
-  //   console.log('EEEEERORROORO');
-  //   Tts.speak('see you');
-  // }
-  // };
-
-  onSpeechRecognized = e => console.log('Recognize', e);
-
-  onSpeechPartialResults = e => console.log('Partial', e);
+  onSpeechError = async e => {
+    // ? check if it work fine
+    if (e.error.message.includes('7')) {
+      const dialogflowResponse = await getDialogFlow('bla bla bla');
+      await Tts.speak(dialogflowResponse.result.fulfillment.speech); // eslint-disable-line
+    } else {
+      this.setState({ allowRecognition: false });
+      Tts.speak('see you');
+    }
+  };
 
   onSpeechResults = async e => {
     console.log('Result', e);
@@ -136,6 +117,8 @@ export default class VoiceAssistent extends React.Component {
       this.setState({ isPlaying: true, allowRecognition: false });
       Tts.speak(dialogflowResponse.result.fulfillment.speech);
     } else if (dialogflowResponse.result.metadata.intentName === 'Play') {
+      //! resolve this first
+      Tts.speak(dialogflowResponse.result.fulfillment.speech);
       if (dialogflowResponse.result.parameters.last === '') {
         this.time = setTimeout(async () => {
           await Voice.start('en-US');
@@ -146,7 +129,6 @@ export default class VoiceAssistent extends React.Component {
     } else {
       Tts.speak(dialogflowResponse.result.fulfillment.speech);
     }
-    await Voice.stop();
   };
 
   _startRecognition = () => {
@@ -161,12 +143,7 @@ export default class VoiceAssistent extends React.Component {
   };
 
   async _record() {
-    const {
-      recording,
-      audioPath,
-      hasPermission,
-      stoppedRecording,
-    } = this.state;
+    const { audioPath, hasPermission, stoppedRecording } = this.state;
     if (!hasPermission) {
       console.warn("Can't record, no permission granted!"); //eslint-disable-line
       return;
