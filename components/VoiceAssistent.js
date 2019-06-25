@@ -13,6 +13,7 @@ import {
   greetingPhrase,
   startPhrase,
 } from '../constants/ttsPhrases';
+import { localhostServer, uploadAudioToServer } from '../constants/paths';
 
 const styles = StyleSheet.create({
   assistentWrapper: {
@@ -67,6 +68,7 @@ export default class VoiceAssistent extends React.Component {
     };
     Voice.onSpeechResults = this.onSpeechResults;
     Voice.onSpeechPartialResults = e => {
+      console.log(e.value);
       const { isRecording } = this.state;
       if (isRecording && Platform.OS === 'ios') {
         this.stopRecordingByVoice(e);
@@ -184,6 +186,29 @@ export default class VoiceAssistent extends React.Component {
     this.setState({
       stoppedRecording: false,
     });
+    await this._uploadAudioToServer();
+  };
+
+  _uploadAudioToServer = async () => {
+    const { audioPath } = this.state;
+    const path = `file://${audioPath}`;
+    const formData = new FormData();
+    formData.append('file', {
+      uri: path,
+      name: 'test.aac',
+      type: 'audio/aac',
+    });
+    await fetch(localhostServer + uploadAudioToServer, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'multipart/form-data',
+      },
+      body: formData,
+    })
+      .then(res => {
+        return res.json();
+      })
+      .catch(err => console.log(err));
   };
 
   _record = async () => {
@@ -324,6 +349,18 @@ export default class VoiceAssistent extends React.Component {
         >
           <Text>Speak</Text>
         </Button>
+
+        <Button
+          bordered
+          style={styles.button}
+          onPress={() => {
+            this.setState({ allowRecognition: false, isRecording: true });
+            Tts.speak('ok');
+          }}
+        >
+          <Text>Record</Text>
+        </Button>
+
         {isRecording ? (
           <View style={styles.recControls}>
             <Button
