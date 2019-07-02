@@ -5,6 +5,7 @@ import Voice from 'react-native-voice';
 import Tts from 'react-native-tts';
 import Sound from 'react-native-sound';
 import { AudioRecorder, AudioUtils } from 'react-native-audio';
+import { _uploadAudioToAWS } from './RecordUploader';
 import { getDialogFlow } from '../utils/df_request';
 
 import {
@@ -13,17 +14,19 @@ import {
   greetingPhrase,
   startPhrase,
 } from '../constants/ttsPhrases';
-import { localhostServer, uploadAudioToServer } from '../constants/paths';
 
 const styles = StyleSheet.create({
   assistentWrapper: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5FCFF',
+    backgroundColor: '#DCDCDC',
   },
   button: {
-    alignSelf: 'center',
+    borderBottomColor: '#F5FCFF',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 30,
+    marginBottom: 20,
     margin: 20,
   },
   recControls: {
@@ -182,37 +185,17 @@ export default class VoiceAssistent extends React.Component {
   };
 
   _finishRecording = async () => {
+    const { audioPath } = this.state;
     await Tts.speak(finishRecPhrase);
     this.setState({
       stoppedRecording: false,
     });
-    await this._uploadAudioToServer();
-  };
-
-  _uploadAudioToServer = async () => {
-    const { audioPath } = this.state;
-    const path = `file://${audioPath}`;
-    const formData = new FormData();
-    formData.append('file', {
-      uri: path,
-      name: 'test.aac',
-      type: 'audio/aac',
-    });
-    await fetch(localhostServer + uploadAudioToServer, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'multipart/form-data',
-      },
-      body: formData,
-    })
-      .then(res => {
-        return res.json();
-      })
-      .catch(err => console.log(err));
+    await _uploadAudioToAWS(audioPath);
   };
 
   _record = async () => {
     const { audioPath, hasPermission, stoppedRecording } = this.state;
+    this.prepareRecordingPath(audioPath);
     if (!hasPermission) {
       console.warn("Can't record, no permission granted!"); //eslint-disable-line
       return;
@@ -342,23 +325,23 @@ export default class VoiceAssistent extends React.Component {
     return (
       <View style={styles.assistentWrapper}>
         <Button
-          bordered
           style={styles.button}
           onPress={this._startRecognition}
           disable={allowRecognition}
         >
-          <Text>Speak</Text>
+          <Text style={{ color: '#A9A9A9' }}>Speak</Text>
         </Button>
 
         <Button
-          bordered
           style={styles.button}
           onPress={() => {
             this.setState({ allowRecognition: false, isRecording: true });
             Tts.speak('ok');
           }}
         >
-          <Text>Record</Text>
+          <Text style={{ textAlign: 'center', width: 90, color: '#A9A9A9' }}>
+            Record
+          </Text>
         </Button>
 
         {isRecording ? (
