@@ -75,6 +75,7 @@ const styles = StyleSheet.create({
 
 export default class SignUpForm extends Component {
   state = {
+    signUpError: false,
     resultMessage: false,
   };
 
@@ -86,25 +87,33 @@ export default class SignUpForm extends Component {
   };
 
   submitForm = async formData => {
-    console.log(formData);
     const { navigation } = this.props;
     try {
       const user = await sendSignUpRequest(formData);
-      const { email, token } = user.data.user;
-      await AsyncStorage.setItem('user', JSON.stringify({ email, token }));
-      this.setState({
-        resultMessage: true,
-      });
-      setTimeout(() => {
-        navigation.navigate('Home');
-      }, 1000);
+      const { statusCode, data } = user;
+      if (statusCode === 200) {
+        const { email, token } = data;
+        await AsyncStorage.setItem('user', JSON.stringify({ email, token }));
+        this.setState({
+          signUpError: false,
+          resultMessage: 'Your sign up is successful',
+        });
+        setTimeout(() => {
+          navigation.navigate('Home');
+        }, 1000);
+      } else {
+        this.setState({
+          signUpError: true,
+          resultMessage: user.text,
+        });
+      }
     } catch (err) {
       console.log(err);
     }
   };
 
   render() {
-    const { resultMessage } = this.state;
+    const { resultMessage, signUpError } = this.state;
     return (
       <ScrollView
         contentContainerStyle={{
@@ -132,8 +141,11 @@ export default class SignUpForm extends Component {
             }
             if (!values.firstName) {
               errors.firstName = 'Required';
-            } else if (values.firstName.length < 2) {
-              errors.firstName = 'Must be longer then 1 simbol';
+            } else if (
+              values.firstName.length < 2 ||
+              values.firstName.length > 10
+            ) {
+              errors.firstName = 'Must be 2 - 10 simbols';
             }
             if (!values.password) {
               errors.password = 'Required';
@@ -166,8 +178,14 @@ export default class SignUpForm extends Component {
                 Enter your sign up data
               </Text>
               {resultMessage ? (
-                <Text style={styles.resultMessage}>
-                  Your sign up is successful
+                <Text
+                  style={
+                    signUpError
+                      ? styles.resultMessageError
+                      : styles.resultMessage
+                  }
+                >
+                  {resultMessage}
                 </Text>
               ) : null}
               <View style={styles.inputContainer}>

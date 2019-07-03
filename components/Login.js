@@ -68,10 +68,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     fontSize: 20,
   },
+  resultMessageError: {
+    color: 'red',
+    marginBottom: 20,
+    fontSize: 20,
+  },
 });
 
 export default class LoginForm extends Component {
   state = {
+    signInError: false,
     resultMessage: false,
   };
 
@@ -83,32 +89,38 @@ export default class LoginForm extends Component {
   };
 
   submitForm = async formData => {
-    console.log('herer');
     const { navigation } = this.props;
     try {
       const user = await sendSignInRequest(formData);
-      const { email, token } = user;
-      await AsyncStorage.setItem('user', JSON.stringify({ email, token }));
-      this.setState({
-        resultMessage: true,
-      });
-      setTimeout(() => {
-        navigation.navigate('Home');
-      }, 1000);
+      const { statusCode, data } = user;
+      if (statusCode === 200) {
+        const { email, token } = data;
+        await AsyncStorage.setItem('user', JSON.stringify({ email, token }));
+        this.setState({
+          signInError: false,
+          resultMessage: 'Your sign in is successful',
+        });
+        setTimeout(() => {
+          navigation.navigate('Home');
+        }, 1000);
+      } else {
+        this.setState({
+          signInError: true,
+          resultMessage: user.text,
+        });
+      }
     } catch (err) {
       console.log(err);
     }
   };
 
   render() {
-    const { resultMessage } = this.state;
+    const { resultMessage, signInError } = this.state;
     return (
       <Formik
         initialValues={{
           email: '',
           password: '',
-          firstName: '',
-          phoneNumber: '',
         }}
         validate={values => {
           const errors = {};
@@ -144,8 +156,12 @@ export default class LoginForm extends Component {
               Enter your sign in data
             </Text>
             {resultMessage ? (
-              <Text style={styles.resultMessage}>
-                Your sign in is successful
+              <Text
+                style={
+                  signInError ? styles.resultMessageError : styles.resultMessage
+                }
+              >
+                {resultMessage}
               </Text>
             ) : null}
             <View style={styles.inputContainer}>

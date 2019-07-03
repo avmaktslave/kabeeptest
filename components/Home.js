@@ -76,7 +76,6 @@ export default class HomeScreen extends React.Component {
   }
 
   _logOut = () => {
-    console.log('logout');
     const { navigation } = this.props;
     AsyncStorage.removeItem('user');
     navigation.navigate('Login');
