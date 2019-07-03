@@ -1,8 +1,9 @@
 import React from 'React';
-import { StyleSheet, View, AsyncStorage } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { Text, Button } from 'native-base';
 import Icon from 'react-native-vector-icons/dist/FontAwesome';
 import PropTypes from 'prop-types';
+import AsyncStorage from '@react-native-community/async-storage';
 
 import VoiceAssistent from './VoiceAssistent';
 
