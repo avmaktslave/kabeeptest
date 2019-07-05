@@ -5,7 +5,9 @@ import Voice from 'react-native-voice';
 import Tts from 'react-native-tts';
 import Sound from 'react-native-sound';
 import { AudioRecorder, AudioUtils } from 'react-native-audio';
-import { _uploadAudioToAWS } from './RecordUploader';
+import AsyncStorage from '@react-native-community/async-storage';
+
+import { _uploadAudioToAWS } from '../utils/RecordUploader';
 import { getDialogFlow } from '../utils/df_request';
 
 import {
@@ -82,9 +84,6 @@ export default class VoiceAssistent extends React.Component {
 
   async componentDidMount() {
     await Tts.getInitStatus();
-    // Tts.addEventListener('tts-start', e => {
-    //   console.log('text to speak started', e);
-    // });
     Tts.addEventListener('tts-finish', this.finishTextToSpeechHandler);
     Tts.setDefaultLanguage('en-US');
     Tts.setDefaultVoice('com.apple.ttsbundle.Moira-compact');
@@ -190,7 +189,16 @@ export default class VoiceAssistent extends React.Component {
     this.setState({
       stoppedRecording: false,
     });
-    await _uploadAudioToAWS(audioPath);
+    let user = {};
+    try {
+      await AsyncStorage.getItem('user').then(value => {
+        user = JSON.parse(value);
+      });
+    } catch (err) {
+      console.log('finishRecording', err);
+    }
+    const { token } = user;
+    await _uploadAudioToAWS(audioPath, token);
   };
 
   _record = async () => {

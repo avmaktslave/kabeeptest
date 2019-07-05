@@ -38,7 +38,7 @@ export default class HomeScreen extends React.Component {
             justifyContent: 'space-between',
           }}
         >
-          <Icon.Button name="user" backgroundColor="#D3D3D3">
+          <Icon.Button name="user" backgroundColor="#DCDCDC">
             <Text
               style={{ fontFamily: 'Arial', fontSize: 15, color: '#696969' }}
             >
@@ -91,9 +91,9 @@ export default class HomeScreen extends React.Component {
         <Button
           style={styles.button}
           bordered
-          onPress={() => navigation.navigate('Record')}
+          onPress={() => navigation.navigate('KabeepsList')}
         >
-          <Text>Go to recorder</Text>
+          <Text>Your kabeeps List</Text>
         </Button>
       </View>
     );

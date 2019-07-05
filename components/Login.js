@@ -11,7 +11,7 @@ import { Formik } from 'formik';
 import PropTypes from 'prop-types';
 import Icon from 'react-native-vector-icons/dist/FontAwesome';
 
-import { sendSignInRequest } from './FormUploader';
+import { sendSignInRequest } from '../utils/FormUploader';
 
 const styles = StyleSheet.create({
   container: {

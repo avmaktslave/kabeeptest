@@ -12,7 +12,7 @@ import PropTypes from 'prop-types';
 import { Formik } from 'formik';
 import Icon from 'react-native-vector-icons/dist/FontAwesome';
 
-import { sendSignUpRequest } from './FormUploader';
+import { sendSignUpRequest } from '../utils/FormUploader';
 
 const styles = StyleSheet.create({
   container: {
@@ -109,6 +109,10 @@ export default class SignUpForm extends Component {
       }
     } catch (err) {
       console.log(err);
+      this.setState({
+        signUpError: true,
+        resultMessage: 'serverError',
+      });
     }
   };
 
