@@ -1,22 +1,55 @@
 import React from 'react';
-import { StyleSheet, Platform } from 'react-native';
+import { StyleSheet, Platform, View } from 'react-native';
 import { Button, Text } from 'native-base';
 import Voice from 'react-native-voice';
 import Tts from 'react-native-tts';
 import Sound from 'react-native-sound';
 import { AudioRecorder, AudioUtils } from 'react-native-audio';
+import AsyncStorage from '@react-native-community/async-storage';
+
+import { _uploadAudioToAWS } from '../utils/RecordUploader';
 import { getDialogFlow } from '../utils/df_request';
 
+import {
+  cancelPhrase,
+  finishRecPhrase,
+  greetingPhrase,
+  startPhrase,
+} from '../constants/ttsPhrases';
+
 const styles = StyleSheet.create({
-  container: {
+  assistentWrapper: {
     flex: 1,
-    justifyContent: 'space-around',
+    justifyContent: 'center',
     alignItems: 'center',
-    backgroundColor: '#F5FCFF',
+    backgroundColor: '#DCDCDC',
   },
   button: {
-    alignSelf: 'center',
+    borderBottomColor: '#F5FCFF',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 30,
+    marginBottom: 20,
     margin: 20,
+  },
+  recControls: {
+    flexDirection: 'row',
+    backgroundColor: '#F5FCFF',
+    flex: 0.2,
+    shadowRadius: 2,
+    marginTop: 5,
+    shadowOffset: {
+      width: 0,
+      height: -3,
+    },
+    shadowColor: '#000000',
+    elevation: 1,
+  },
+  recControlButton: {
+    alignSelf: 'center',
+    backgroundColor: '#DDDDDD',
+    margin: 10,
+    borderRadius: 30,
+    color: '#eee',
   },
   transcript: {
     textAlign: 'center',
@@ -30,43 +63,59 @@ export default class VoiceAssistent extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-      recording: false,
-      paused: false,
+      isPlaying: false,
+      allowRecognition: false,
+      isRecording: false,
+      isPaused: false,
       stoppedRecording: false,
       audioPath: `${AudioUtils.DocumentDirectoryPath}/test.aac`,
       hasPermission: undefined,
     };
     Voice.onSpeechResults = this.onSpeechResults;
-    Voice.onSpeechError = this.onSpeechError;
+    Voice.onSpeechPartialResults = e => {
+      console.log(e.value);
+      const { isRecording } = this.state;
+      if (isRecording && Platform.OS === 'ios') {
+        this.stopRecordingByVoice(e);
+      }
+    };
+    // Voice.onSpeechError = this.onSpeechError;
   }
 
-  componentDidMount() {
-    Tts.getInitStatus().then(() => {
-      Tts.setDefaultLanguage('en-US');
-      Tts.setDefaultVoice('com.apple.ttsbundle.Moira-compact');
-      Tts.speak('Welcom to Kabeep service. Press the Speak button to call me'); // eslint-disable-line
-    });
+  async componentDidMount() {
+    await Tts.getInitStatus();
+    Tts.addEventListener('tts-finish', this.finishTextToSpeechHandler);
+    Tts.setDefaultLanguage('en-US');
+    Tts.setDefaultVoice('com.apple.ttsbundle.Moira-compact');
+    Tts.speak(greetingPhrase);
     const { audioPath } = this.state;
     AudioRecorder.requestAuthorization().then(isAuthorised => {
       this.setState({ hasPermission: isAuthorised });
       if (!isAuthorised) return;
       this.prepareRecordingPath(audioPath);
-      AudioRecorder.onFinished = data => {
-        // Android callback comes in the form of a promise instead.
-        if (Platform.OS === 'ios') {
-          this._finishRecording(
-            data.status === 'OK',
-            data.audioFileURL,
-            data.audioFileSize,
-          );
-        }
-      };
     });
   }
 
   componentWillUnmount() {
     Voice.destroy().then(Voice.removeAllListeners);
   }
+
+  finishTextToSpeechHandler = async () => {
+    const { allowRecognition, isRecording, isPlaying } = this.state;
+    if (allowRecognition) {
+      try {
+        await Voice.start();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    if (isRecording) {
+      this._record();
+    }
+    if (isPlaying) {
+      this._play();
+    }
+  };
 
   prepareRecordingPath = audioPath => {
     AudioRecorder.prepareRecordingAtPath(audioPath, {
@@ -80,72 +129,81 @@ export default class VoiceAssistent extends React.Component {
   };
 
   onSpeechError = async e => {
-    clearTimeout(this.time);
+    console.log('onSpeechError');
+    // ? check if it work fine
     if (e.error.message.includes('7')) {
-      const dialogflowResponse = await getDialogFlow('bla bla bla');
-      await Tts.speak(dialogflowResponse.result.fulfillment.speech); // eslint-disable-line
-      this.time = setTimeout(async () => {
-        await Voice.start('en-US');
-      }, 2500);
+      const dialogflowResponse = await getDialogFlow('onSpeechError');
+      await Tts.speak(dialogflowResponse.result.fulfillment.speech);
     } else {
-      clearTimeout(this.time);
-      console.log('EEEEERORROORO');
+      this.setState({ allowRecognition: false });
       Tts.speak('see you');
     }
   };
 
   onSpeechResults = async e => {
-    console.log(e.value[0]);
-    clearTimeout(this.time);
-    const dialogflowResponse = await getDialogFlow(e.value[0]);
-    await Tts.speak(dialogflowResponse.result.fulfillment.speech);
-    console.log(dialogflowResponse);
-    if (dialogflowResponse.result.metadata.intentName === 'Record') {
-      setTimeout(() => {
-        console.log('record started');
-        this._record();
-      }, 5500);
-    } else if (
-      dialogflowResponse.result.metadata.intentName ===
-      'Confirm playing after record'
-    ) {
-      setTimeout(() => {
-        this._play();
-      }, 2000);
-    } else if (dialogflowResponse.result.metadata.intentName === 'Play') {
-      if (dialogflowResponse.result.parameters.last === '') {
-        this.time = setTimeout(async () => {
-          await Voice.start('en-US');
-        }, 3000);
+    const { isRecording: isRecordingNow, stoppedRecording } = this.state;
+    if (!isRecordingNow && !stoppedRecording) {
+      let dialogflowResponse = {};
+      e.value[0].toLowerCase().includes('stop')
+        ? null
+        : (dialogflowResponse = await getDialogFlow(e.value[0]));
+      if (dialogflowResponse.result.metadata.intentName === 'Record') {
+        this.setState({ allowRecognition: false, isRecording: true });
+        Tts.speak(dialogflowResponse.result.fulfillment.speech);
+      } else if (
+        dialogflowResponse.result.metadata.intentName ===
+        'Confirm playing after record'
+      ) {
+        this.setState({ isPlaying: true, allowRecognition: false });
+        Tts.speak(dialogflowResponse.result.fulfillment.speech);
+      } else if (dialogflowResponse.result.metadata.intentName === 'Play') {
+        //! resolve this first
+        Tts.speak(dialogflowResponse.result.fulfillment.speech);
+        if (dialogflowResponse.result.parameters.last === '') {
+          this.time = setTimeout(async () => {
+            await Voice.start('en-US');
+          }, 3000);
+        } else {
+          this._play();
+        }
+      } else if (dialogflowResponse.result.metadata.intentName === 'Cancel') {
+        await Tts.speak(cancelPhrase);
+        this.setState({ allowRecognition: false });
+        Voice.stop();
       } else {
-        this._play();
+        await Tts.speak(dialogflowResponse.result.fulfillment.speech);
       }
-    } else {
-      this.time = setTimeout(async () => {
-        await Voice.start('en-US');
-      }, 3500);
+    } else if (isRecordingNow && !stoppedRecording) {
+      Voice.start();
     }
   };
 
   _startRecognition = () => {
-    clearTimeout(this.time);
-    Tts.getInitStatus().then(() => Tts.speak("Great, I'm here")); // eslint-disable-line
-    this.time = setTimeout(async () => {
-      await Voice.start('en-US');
-    }, 1000);
+    Tts.getInitStatus().then(() => Tts.speak(startPhrase)); // eslint-disable-line
+    this.setState({ allowRecognition: true });
   };
 
-  async _record() {
-    const {
-      recording,
-      audioPath,
-      hasPermission,
-      stoppedRecording,
-    } = this.state;
-    if (recording) {
-      console.warn('Already recording!');
-      return;
+  _finishRecording = async () => {
+    const { audioPath } = this.state;
+    await Tts.speak(finishRecPhrase);
+    this.setState({
+      stoppedRecording: false,
+    });
+    let user = {};
+    try {
+      await AsyncStorage.getItem('user').then(value => {
+        user = JSON.parse(value);
+      });
+    } catch (err) {
+      console.log('finishRecording', err);
     }
+    const { token } = user;
+    await _uploadAudioToAWS(audioPath, token);
+  };
+
+  _record = async () => {
+    const { audioPath, hasPermission, stoppedRecording } = this.state;
+    this.prepareRecordingPath(audioPath);
     if (!hasPermission) {
       console.warn("Can't record, no permission granted!"); //eslint-disable-line
       return;
@@ -153,97 +211,83 @@ export default class VoiceAssistent extends React.Component {
     if (stoppedRecording) {
       this.prepareRecordingPath(audioPath);
     }
-    this.setState({ recording: true, paused: false });
+    this.setState({ isPaused: false });
     try {
       await AudioRecorder.startRecording();
       if (Platform.OS === 'ios') {
+        Voice.start();
         const timing = [];
         AudioRecorder.onProgress = data => {
           if (data.currentPeakMetering > -24) {
             timing.length = 0;
           } else {
             timing.push(Math.floor(data.currentTime));
-            Math.floor(data.currentTime) - timing[0] === 3 &&
-              this._stop() &&
-              Tts.speak('the recording is finished');
+            Math.floor(data.currentTime) - timing[0] === 9 &&
+              this._stopRecording();
           }
         };
       } else if (Platform.OS === 'android') {
         const timing = [];
         AudioRecorder.onProgress = data => {
-          if (data.currentMetering > 2500) {
+          if (data.currentMetering > 5000) {
             timing.length = 0;
           } else {
             timing.push(Math.floor(data.currentTime));
-            Math.floor(data.currentTime) - timing[0] === 3 &&
-              this._stop() &&
-              Tts.speak('the recording is finished');
+            Math.floor(data.currentTime) - timing[0] === 4 &&
+              this._stopRecording();
           }
         };
       }
     } catch (error) {
       console.error(error);
     }
-  }
+  };
 
-  async _stop() {
-    const { recording } = this.state;
-    if (!recording) {
-      console.warn("Can't stop, not recording!"); //eslint-disable-line
+  _stopRecording = async () => {
+    const { isRecording } = this.state;
+    this.setState({
+      stoppedRecording: true,
+      isRecording: false,
+      isPaused: false,
+      allowRecognition: true,
+    });
+    if (!isRecording) {
+      console.warn("Can't stop, not isRecording!"); //eslint-disable-line
       return;
     }
-    this.setState({ stoppedRecording: true, recording: false, paused: false });
     try {
       const filePath = await AudioRecorder.stopRecording();
       setTimeout(() => {
         this._finishRecording();
       }, 0);
-      console.log('AFTER FINISH');
       return filePath;
     } catch (error) {
       console.error(error);
     }
-  }
+  };
 
-  _finishRecording() {
-    Tts.speak('Would you like to hear your Kabeep?');
-    this.time = setTimeout(async () => {
-      await Voice.start('en-US');
-    }, 2500);
-  }
-
-  async _pause() {
-    const { recording } = this.state;
-    if (!recording) {
-      console.warn("Can't pause, not recording!"); //eslint-disable-line
-      return;
-    }
+  _pause = async () => {
     try {
       await AudioRecorder.pauseRecording();
-      this.setState({ paused: true });
+      this.setState({ isPaused: true });
     } catch (error) {
       console.error(error);
     }
-  }
+  };
 
-  async _resume() {
-    const { paused } = this.state;
-    if (!paused) {
-      console.warn("Can't resume, not paused!"); //eslint-disable-line
-      return;
-    }
+  _resume = async () => {
     try {
       await AudioRecorder.resumeRecording();
-      this.setState({ paused: false });
+      this.setState({ isPaused: false });
     } catch (error) {
       console.error(error);
     }
-  }
+  };
 
-  async _play() {
-    const { recording, audioPath } = this.state;
-    if (recording) {
-      await this._stop();
+  _play = async () => {
+    const { isRecording, audioPath } = this.state;
+    if (isRecording) {
+      await this._stopRecording();
     }
     // These timeouts are a hacky workaround for some issues with react-native-sound.
     // See https://github.com/zmxv/react-native-sound/issues/89.
@@ -253,7 +297,6 @@ export default class VoiceAssistent extends React.Component {
           console.log('failed to load the sound', error);
         }
       });
-
       setTimeout(() => {
         sound.play(success => {
           if (success) {
@@ -261,16 +304,73 @@ export default class VoiceAssistent extends React.Component {
           } else {
             console.log('playback failed due to audio decoding errors');
           }
+          this.setState({
+            isPlaying: false,
+          });
         });
       }, 100);
     }, 100);
+  };
+
+  async stopRecordingByVoice(e) {
+    if (
+      e.value[0] ===
+        ('Stop' ||
+          'Stop isRecording' ||
+          'Stop kabeep' ||
+          'Stop isRecording kabeep' ||
+          'stop') ||
+      e.value[0].toLowerCase().includes('stop isRecording')
+    ) {
+      console.log('stopRecordingByVoice');
+      Voice.stop();
+      this._stopRecording();
+    }
   }
 
   render() {
+    const { isRecording, allowRecognition, isPaused } = this.state;
     return (
-      <Button bordered style={styles.button} onPress={this._startRecognition}>
-        <Text>Speak</Text>
-      </Button>
+      <View style={styles.assistentWrapper}>
+        <Button
+          style={styles.button}
+          onPress={this._startRecognition}
+          disable={allowRecognition}
+        >
+          <Text style={{ color: '#A9A9A9' }}>Speak</Text>
+        </Button>
+
+        <Button
+          style={styles.button}
+          onPress={() => {
+            this.setState({ allowRecognition: false, isRecording: true });
+            Tts.speak('ok');
+          }}
+        >
+          <Text style={{ textAlign: 'center', width: 90, color: '#A9A9A9' }}>
+            Record
+          </Text>
+        </Button>
+
+        {isRecording ? (
+          <View style={styles.recControls}>
+            <Button
+              style={styles.recControlButton}
+              onPress={this._stopRecording}
+              disable={allowRecognition}
+            >
+              <Text>Stop</Text>
+            </Button>
+            <Button
+              style={styles.recControlButton}
+              onPress={isPaused ? this._resume : this._pause}
+              disable={allowRecognition}
+            >
+              <Text>{isPaused ? 'Resume' : 'Pause'}</Text>
+            </Button>
+          </View>
+        ) : null}
+      </View>
     );
   }
 }
